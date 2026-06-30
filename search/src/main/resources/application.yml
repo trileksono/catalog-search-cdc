@@ -1,0 +1,39 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: search-service
+
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:redis}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    streams:
+      application-id: search-service-streams
+      properties:
+        bootstrap.servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+        default.key.serde: org.springframework.kafka.support.serializer.JsonSerde
+        default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+        commit.interval.ms: 1000
+        num.stream.threads: 1
+        spring.json.trusted.packages: "*"
+        allow.missing.source.topics: true
+
+app:
+  kafka:
+    product-topic: product-events
+    category-topic: category-events
+    enriched-topic: enriched-products
+  elasticsearch:
+    host: ${ELASTICSEARCH_HOST:localhost}
+    port: ${ELASTICSEARCH_PORT:9200}
+    index: products
+
+logging:
+  level:
+    com.example.search: DEBUG
+    org.apache.kafka: WARN
