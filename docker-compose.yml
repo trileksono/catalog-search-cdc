@@ -76,6 +76,64 @@ services:
       timeout: 5s
       retries: 10
 
+  kafka-connect:
+    image: debezium/connect:2.5
+    container_name: kafka-connect
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8085:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: connect-cluster
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      STATUS_STORAGE_TOPIC: connect_status
+      CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8083/connectors"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  connect-setup:
+    image: curlimages/curl:8.6.0
+    container_name: connect-setup
+    depends_on:
+      kafka-connect:
+        condition: service_healthy
+      postgres-product:
+        condition: service_healthy
+      postgres-category:
+        condition: service_healthy
+    volumes:
+      - ./connectors:/connectors
+    entrypoint: ["/bin/sh", "/connectors/wait-and-register.sh"]
+
+  elasticsearch:
+    image: elasticsearch:8.12.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   product-service:
     build:
       context: .
@@ -128,10 +186,16 @@ services:
       dockerfile: ./search/Dockerfile
     container_name: search-service
     depends_on:
+      elasticsearch:
+        condition: service_healthy
       kafka:
         condition: service_healthy
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: "9200"
+      HAZELCAST_MEMBERS: search-service
+      HAZELCAST_INSTANCE_NAME: search-service
       SERVER_PORT: "8083"
     ports:
       - "8083:8083"
